@@ -1,0 +1,6 @@
+numpy>=1.26
+PySide6>=6.6
+pyqtgraph>=0.13
+PyOpenGL>=3.1
+matplotlib>=3.8   # solo para graficas de evaluacion (no para el HMM)
+pytest>=8.0
