@@ -129,4 +129,5 @@ class View2D(QWidget):
         self.prediccion.setText(letra)
         self.detalle.setText(f"{probs[letra] * 100:.1f} %  ·  proyectando «{letra}»")
         self.info.setText(f"T = {len(simbolos)} símbolos   ·   últimos: {FE.describe(simbolos[-8:])}")
-        self.canvas.set_proyeccion(self.rec.project(letra, self.canvas.ultimo_punto()))
+        escala = FE.escala(self.canvas.trazos)          # la proyección usa el mismo tamaño normalizado
+        self.canvas.set_proyeccion(self.rec.project(letra, self.canvas.ultimo_punto(), escala))

@@ -21,14 +21,14 @@ def test_remuestreo_distancia_fija():
 
 def test_letra_L():
     trazo = [[100, 100], [100, 300], [300, 300]]     # bajar 200 y derecha 200
-    s = FE.strokes_to_symbols([trazo], step=25)
+    s = FE.strokes_to_symbols([trazo], step=25, normalizar=False)
     assert s == [12] * 8 + [0] * 8
 
 
 def test_levantar_lapiz():
     i_palito = [[500, 400], [500, 700]]              # palito de la "i"
     i_punto = [[500, 250], [501, 251]]               # el punto, arriba
-    s = FE.strokes_to_symbols([i_palito, i_punto], step=25)
+    s = FE.strokes_to_symbols([i_palito, i_punto], step=25, normalizar=False)
     assert s[:12] == [12] * 12                       # bajar con el lápiz abajo
     assert all(x == FE.PEN_UP + 4 for x in s[12:])   # subir con el lápiz arriba
 
@@ -36,6 +36,14 @@ def test_levantar_lapiz():
 def test_prefijo_estable():
     """Al agregar puntos al final, los símbolos anteriores no cambian (necesario para Forward incremental)."""
     trazo = [[100, 100], [130, 160], [200, 210], [260, 230], [330, 300]]
-    corto = FE.strokes_to_symbols([trazo[:3]])
-    largo = FE.strokes_to_symbols([trazo])
+    corto = FE.strokes_to_symbols([trazo[:3]], normalizar=False)
+    largo = FE.strokes_to_symbols([trazo], normalizar=False)
     assert largo[:len(corto)] == corto
+
+
+def test_tamano_y_posicion_no_importan():
+    """Una letra diminuta en una esquina se agranda al tamaño mínimo normal (200)."""
+    normal = [[[300, 300], [300, 500], [400, 500]]]            # "L" de 200 de alto: no se toca
+    chica = [[[900, 900], [900, 940], [920, 940]]]             # la misma "L" 5 veces más pequeña, en una esquina
+    assert FE.escala(normal) == 1.0
+    assert FE.strokes_to_symbols(chica) == FE.strokes_to_symbols(normal)

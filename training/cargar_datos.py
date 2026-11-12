@@ -60,6 +60,25 @@ def dividir_por_autor(muestras: list[dict], fraccion_prueba: float = 0.2, semill
     return entrenamiento, test
 
 
+def cargar_varios(rutas) -> list[dict]:
+    """Carga varios JSON de Glifo y quita las muestras repetidas (mismos trazos)."""
+    vistas, todas = set(), []
+    for ruta in rutas:
+        for m in cargar(ruta):
+            clave = json.dumps(m["trazos"])
+            if clave not in vistas:
+                vistas.add(clave)
+                todas.append(m)
+    return todas
+
+
+def todos_los_json(carpeta: str | Path = "data/raw") -> list[Path]:
+    archivos = sorted(Path(carpeta).glob("*.json"))
+    if not archivos:
+        raise FileNotFoundError(f"No hay archivos .json en {carpeta}. Exporta el dataset desde Glifo.")
+    return archivos
+
+
 def buscar_json(carpeta: str | Path = "data/raw") -> Path:
     """Devuelve el JSON más reciente de la carpeta (por si no se indica uno)."""
     archivos = sorted(Path(carpeta).glob("*.json"), key=lambda p: p.stat().st_mtime)

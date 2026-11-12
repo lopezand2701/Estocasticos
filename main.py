@@ -6,7 +6,8 @@ Punto de entrada de la aplicación.
     python main.py
 
 Requiere haber entrenado antes los modelos:
-    python -m training.train
+    python -m training.train              (2D)
+    python -m training.train --modo 3d    (3D; si no existen, el botón 3D queda deshabilitado)
 """
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ from src.gui.styles import QSS
 from src.hmm.Recognizer import Recognizer
 
 MODELOS_2D = Path(__file__).parent / "models" / "2d" / "hmm_2d.json"
+MODELOS_3D = Path(__file__).parent / "models" / "3d" / "hmm_3d.json"
 
 
 def main() -> None:
@@ -28,7 +30,8 @@ def main() -> None:
                              f"No se encontró {MODELOS_2D}.\n\n"
                              "Entrena primero con:\n    python -m training.train")
         sys.exit(1)
-    ventana = MainWindow(Recognizer.load(MODELOS_2D))
+    rec_3d = Recognizer.load(MODELOS_3D) if MODELOS_3D.exists() else None
+    ventana = MainWindow(Recognizer.load(MODELOS_2D), rec_3d)
     ventana.show()
     sys.exit(app.exec())
 
