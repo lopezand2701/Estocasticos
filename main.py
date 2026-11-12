@@ -15,7 +15,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from src.gui.MainWindow import MainWindow
-from src.gui.styles import QSS
+from src.gui import styles
 from src.hmm.Recognizer import Recognizer
 
 MODELOS_2D = Path(__file__).parent / "models" / "2d" / "hmm_2d.json"
@@ -24,7 +24,8 @@ MODELOS_3D = Path(__file__).parent / "models" / "3d" / "hmm_3d.json"
 
 def main() -> None:
     app = QApplication(sys.argv)
-    app.setStyleSheet(QSS)
+    styles.cargar_fuentes()                       # Lexend, incluida en assets/fonts
+    app.setStyleSheet(styles.QSS)
     if not MODELOS_2D.exists():
         QMessageBox.critical(None, "Faltan los modelos",
                              f"No se encontró {MODELOS_2D}.\n\n"

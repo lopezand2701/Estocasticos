@@ -25,7 +25,7 @@ rueda = zoom · flechas = girar 15°.
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import QPointF, Qt, QTimer, Signal
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QRadialGradient
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -248,54 +248,70 @@ class Sphere3D(QWidget):
         cx, cy = self._centro()
         r = self._radio_px()
 
-        # esfera con sombreado (luz arriba a la izquierda)
-        grad = QRadialGradient(QPointF(cx - r * 0.35, cy - r * 0.4), r * 1.45)
-        grad.setColorAt(0.0, QColor("#2f4152"))
-        grad.setColorAt(0.6, QColor("#1c2733"))
-        grad.setColorAt(1.0, QColor("#121a22"))
-        g.setPen(QPen(QColor(styles.BORDE), 1.5))
+        # sombra suave sobre la hoja
+        sombra = QRadialGradient(QPointF(cx, cy + r * 0.92), r * 0.9)
+        sombra.setColorAt(0.0, QColor(28, 47, 77, 40))
+        sombra.setColorAt(1.0, QColor(28, 47, 77, 0))
+        g.setPen(Qt.NoPen)
+        g.setBrush(sombra)
+        g.drawEllipse(QPointF(cx, cy + r * 0.92), r * 0.9, r * 0.22)
+
+        # globo de papel con luz arriba a la izquierda
+        grad = QRadialGradient(QPointF(cx - r * 0.38, cy - r * 0.42), r * 1.55)
+        grad.setColorAt(0.0, QColor("#FFFFFF"))
+        grad.setColorAt(0.55, QColor("#EEF2F7"))
+        grad.setColorAt(1.0, QColor("#C9D5E2"))
+        g.setPen(QPen(QColor(styles.RENGLON_FUERTE), 1.2))
         g.setBrush(grad)
         g.drawEllipse(QPointF(cx, cy), r, r)
 
-        # malla de meridianos y paralelos (se ve girar)
+        # meridianos y paralelos cada 30° (se ven girar); ecuador y meridiano 0 más marcados
         for i, linea in enumerate(self._malla):
-            destacada = i == 0 or i == len(self._malla) - 3          # meridiano 0 y ecuador
-            color = QColor(styles.ACENTO if destacada else "#3c4f61")
-            color.setAlpha(150 if destacada else 120)
-            self._polilinea(g, linea, QPen(color, 1.2 if destacada else 1.0), None)
+            destacada = i == 0 or i == len(self._malla) - 3
+            color = QColor(styles.TINTA)
+            color.setAlpha(110 if destacada else 38)
+            self._polilinea(g, linea, QPen(color, 1.3 if destacada else 1.0), None)
 
-        grosor = max(3.0, r / 70)
+        grosor = max(3.0, r / 65)
 
-        # trazos del usuario (los de atrás, tenues y punteados)
-        atras = QColor(styles.TEXTO)
-        atras.setAlpha(45)
-        pen_frente = QPen(QColor(styles.TEXTO), grosor, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        # trazos del usuario en tinta (los de atrás, tenues y punteados)
+        atras = QColor(styles.TINTA)
+        atras.setAlpha(55)
+        pen_frente = QPen(QColor(styles.TINTA), grosor, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
         pen_atras = QPen(atras, grosor * 0.6, Qt.DotLine, Qt.RoundCap)
         for trazo in self.trazos:
             self._polilinea(g, np.asarray(trazo), pen_frente, pen_atras)
 
-        # proyección punteada sobre la superficie
-        naranja = QColor(styles.PROYECCION)
-        naranja.setAlpha(200)
-        pen_proy = QPen(naranja, grosor * 0.8, Qt.CustomDashLine, Qt.RoundCap)
-        pen_proy.setDashPattern([1.2, 2.2])
+        # proyección en lápiz rojo punteado, sobre la superficie
+        pen_proy = QPen(QColor(styles.LAPIZ_ROJO), grosor * 0.75, Qt.CustomDashLine, Qt.RoundCap)
+        pen_proy.setDashPattern([0.1, 2.2])
         for p0, p1, abajo in self.proyeccion:
             if abajo:
                 self._polilinea(g, np.array([p0, p1]), pen_proy, None)
 
-        # punto de inicio de cada trazo (si se ve)
-        g.setPen(Qt.NoPen)
-        g.setBrush(QColor(styles.ACENTO))
-        for trazo in self.trazos:
+        # inicio de cada trazo con su número (si se ve)
+        f = g.font()
+        f.setPixelSize(int(grosor * 2.2))
+        f.setBold(True)
+        g.setFont(f)
+        rr = grosor * 1.6
+        for n, trazo in enumerate(self.trazos, start=1):
             cam = self.R @ trazo[0]
             if cam[2] > 1.0 / D:
                 x, y = self._a_pantalla(cam[None, :])[0]
-                g.drawEllipse(QPointF(x, y), grosor * 0.9, grosor * 0.9)
+                g.setPen(Qt.NoPen)
+                g.setBrush(QColor(styles.TINTA))
+                g.drawEllipse(QPointF(x, y), rr, rr)
+                g.setPen(QColor(styles.HOJA))
+                g.drawText(QRectF(x - rr, y - rr, 2 * rr, 2 * rr), Qt.AlignCenter, str(n))
 
-        # ayuda y ángulos del cursor
-        g.setPen(QColor(styles.TEXTO_SUAVE))
-        g.drawText(12, 22, "Clic izq.: dibujar  ·  Clic der. (o Shift+clic): girar 360°  ·  Rueda: zoom  ·  Flechas: girar")
+        # ángulos del cursor (conversión a coordenadas esféricas en vivo)
         if self.cursor_angulos:
             th, ph = self.cursor_angulos
-            g.drawText(12, self.height() - 12, f"θ = {th:6.1f}°   φ = {ph:7.1f}°")
+            f.setPixelSize(12)
+            f.setBold(False)
+            g.setFont(f)
+            g.setPen(QColor(styles.GRAFITO))
+            g.drawText(QRectF(0, self.height() - 24, self.width() - 8, 20), Qt.AlignRight | Qt.AlignVCenter,
+                       f"θ {th:5.1f}°   φ {ph:6.1f}°")
         g.end()

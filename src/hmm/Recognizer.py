@@ -106,6 +106,22 @@ class Recognizer:
     # ------------------------------------------------------------------ #
     # 2. Proyección de la trayectoria futura
     # ------------------------------------------------------------------ #
+    def estado_actual(self, letter: str) -> dict | None:
+        """
+        Para la cadena de estados de la interfaz: de la mejor variante de `letter`,
+        cuántas fases tiene (N), en cuál está ahora (s = argmax α̂_t) y la
+        distribución α̂_t completa (probabilidad de cada fase en este instante).
+        """
+        if not self.symbols:
+            return None
+        _, v = self._log_letra(letter, completo=False)
+        hmm = self.models[letter][v][1]
+        alpha = self.alpha[letter][v]
+        if alpha is None:
+            return None
+        return {"N": hmm.N, "fase": int(np.argmax(alpha)), "alpha": np.asarray(alpha),
+                "variante": v + 1, "variantes": len(self.models[letter])}
+
     def project_steps(self, letter: str) -> list[tuple[np.ndarray, bool]]:
         """
         Pasos futuros (dirección, lápiz_abajo) según la mejor variante de `letter`:

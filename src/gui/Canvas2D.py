@@ -1,9 +1,10 @@
 """
 Canvas2D.py
 ===========
-Lienzo cuadrado donde el usuario dibuja con el mouse (o un lápiz/táctil).
-Trabaja internamente en el mismo espacio lógico que el dataset Glifo:
-x, y entre 0 y 1000, con la y creciendo hacia abajo, y las mismas líneas guía.
+Lienzo cuadrado donde el usuario dibuja con el mouse (o un lápiz/táctil), con
+aspecto de hoja de cuaderno de caligrafía. Trabaja internamente en el mismo
+espacio lógico que el dataset Glifo: x, y entre 0 y 1000, con la y creciendo
+hacia abajo, y las mismas líneas guía.
 """
 from __future__ import annotations
 
@@ -66,6 +67,11 @@ class Canvas2D(QWidget):
     def ultimo_punto(self):
         return self.trazos[-1][-1] if self.trazos and self.trazos[-1] else None
 
+    @property
+    def dibujando(self) -> bool:
+        """True mientras el botón del mouse está presionado (lápiz abajo)."""
+        return self._dibujando
+
     # ---------------- eventos del mouse ----------------
     def mousePressEvent(self, e) -> None:
         if e.button() == Qt.LeftButton:
@@ -89,51 +95,65 @@ class Canvas2D(QWidget):
             self._dibujando = False
             self.trazos_cambiaron.emit()           # al levantar el lápiz se reevalúa como letra completa
 
-    @property
-    def dibujando(self) -> bool:
-        """True mientras el botón del mouse está presionado (lápiz abajo)."""
-        return self._dibujando
-
     # ---------------- dibujo ----------------
     def paintEvent(self, _) -> None:
         g = QPainter(self)
         g.setRenderHint(QPainter.Antialiasing)
         a = self._area()
 
-        g.setPen(QPen(QColor(styles.BORDE), 1.5, Qt.DashLine))
-        g.setBrush(QColor(styles.SUPERFICIE))
+        # la hoja
+        g.setPen(QPen(QColor(styles.RENGLON), 1))
+        g.setBrush(QColor(styles.HOJA))
         g.drawRoundedRect(a, 14, 14)
 
-        # líneas guía
+        # cuadrícula muy tenue de fondo, como papel de caligrafía
+        tenue = QColor(styles.RENGLON)
+        tenue.setAlpha(70)
+        g.setPen(QPen(tenue, 1))
+        for k in range(50, 1000, 50):
+            g.drawLine(self._a_pantalla(k, 10), self._a_pantalla(k, 990))
+
+        # margen vertical en lápiz rojo
+        margen = QColor(styles.LAPIZ_ROJO)
+        margen.setAlpha(60)
+        g.setPen(QPen(margen, 1.2))
+        g.drawLine(self._a_pantalla(90, 10), self._a_pantalla(90, 990))
+
+        # renglones (las mismas guías de Glifo); la franja de la altura x apenas sombreada
+        franja = QColor(styles.NIEBLA)
+        franja.setAlpha(110)
+        g.setPen(Qt.NoPen)
+        g.setBrush(franja)
+        g.drawRect(QRectF(self._a_pantalla(90, GUIAS["altura x"]), self._a_pantalla(990, GUIAS["línea base"])))
         for nombre, y in GUIAS.items():
             base = nombre == "línea base"
-            g.setPen(QPen(QColor(styles.BORDE if base else styles.GUIA), 1.5 if base else 1,
+            g.setPen(QPen(QColor(styles.RENGLON_FUERTE if base else styles.RENGLON), 1.6 if base else 1.0,
                           Qt.SolidLine if base else Qt.DashLine))
-            p0, p1 = self._a_pantalla(20, y), self._a_pantalla(980, y)
-            g.drawLine(p0, p1)
-            g.setPen(QColor(styles.TEXTO_SUAVE))
-            g.drawText(p0 + QPointF(4, -4), nombre)
+            g.drawLine(self._a_pantalla(90, y), self._a_pantalla(990, y))
+            g.setPen(QColor(styles.GRAFITO))
+            f = g.font()
+            f.setPixelSize(11)
+            g.setFont(f)
+            g.drawText(QRectF(self._a_pantalla(100, y - 40), self._a_pantalla(600, y - 4)), Qt.AlignLeft | Qt.AlignBottom, nombre)
 
-        grosor = max(3.0, a.width() / 140)
+        grosor = max(3.0, a.width() / 130)
 
-        # proyección (punteada y semitransparente)
-        color = QColor(styles.PROYECCION)
-        color.setAlpha(190)
-        pen = QPen(color, grosor * 0.8, Qt.CustomDashLine, Qt.RoundCap)
-        pen.setDashPattern([1.2, 2.2])
+        # proyección: lápiz rojo punteado
+        rojo = QColor(styles.LAPIZ_ROJO)
+        pen = QPen(rojo, grosor * 0.75, Qt.CustomDashLine, Qt.RoundCap)
+        pen.setDashPattern([0.1, 2.2])
         g.setPen(pen)
         for p0, p1, abajo in self.proyeccion:
             if abajo:
                 g.drawLine(self._a_pantalla(*p0), self._a_pantalla(*p1))
-        # movimientos con el lápiz arriba: puntitos muy tenues
-        color.setAlpha(70)
-        g.setPen(QPen(color, grosor * 0.4, Qt.DotLine, Qt.RoundCap))
+        rojo.setAlpha(80)
+        g.setPen(QPen(rojo, grosor * 0.35, Qt.DotLine, Qt.RoundCap))
         for p0, p1, abajo in self.proyeccion:
             if not abajo:
                 g.drawLine(self._a_pantalla(*p0), self._a_pantalla(*p1))
 
-        # trazos del usuario
-        g.setPen(QPen(QColor(styles.TEXTO), grosor, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        # trazos del usuario en tinta
+        g.setPen(QPen(QColor(styles.TINTA), grosor, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         g.setBrush(Qt.NoBrush)
         for trazo in self.trazos:
             camino = QPainterPath(self._a_pantalla(*trazo[0]))
@@ -142,9 +162,26 @@ class Canvas2D(QWidget):
             if len(trazo) == 1:
                 camino.lineTo(self._a_pantalla(trazo[0][0] + 0.5, trazo[0][1]))
             g.drawPath(camino)
-        # punto de inicio de cada trazo
-        g.setPen(Qt.NoPen)
-        g.setBrush(QColor(styles.ACENTO))
-        for trazo in self.trazos:
-            g.drawEllipse(self._a_pantalla(*trazo[0]), grosor * 0.9, grosor * 0.9)
+
+        # inicio de cada trazo con su número de orden
+        f = g.font()
+        f.setPixelSize(int(grosor * 2.2))
+        f.setBold(True)
+        g.setFont(f)
+        r = grosor * 1.6
+        for i, trazo in enumerate(self.trazos, start=1):
+            c = self._a_pantalla(*trazo[0])
+            g.setPen(Qt.NoPen)
+            g.setBrush(QColor(styles.TINTA))
+            g.drawEllipse(c, r, r)
+            g.setPen(QColor(styles.HOJA))
+            g.drawText(QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r), Qt.AlignCenter, str(i))
+
+        if not self.trazos:
+            g.setPen(QColor(styles.GRAFITO))
+            f.setPixelSize(15)
+            f.setBold(False)
+            g.setFont(f)
+            g.drawText(QRectF(self._a_pantalla(90, 720), self._a_pantalla(990, 880)), Qt.AlignCenter,
+                       "Escribe una letra minúscula sobre los renglones")
         g.end()
