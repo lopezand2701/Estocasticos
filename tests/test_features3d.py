@@ -58,3 +58,10 @@ def test_posicion_en_la_esfera_no_importa():
     assert abs(len(a) - len(b)) <= 1
     n = min(len(a), len(b))
     assert np.mean(np.array(a[:n]) == np.array(b[:n])) > 0.9
+
+
+def test_cada_simbolo_3d_tiene_su_tramo():
+    trazo = F3.pegar_en_esfera([[[500, 420], [500, 700]], [[500, 320], [501, 321]]])
+    s, seg = F3.simbolos_y_segmentos(trazo)
+    assert len(s) == len(seg) and s == F3.strokes_to_symbols(trazo)
+    assert all(abs(np.linalg.norm(p) - 1) < 1e-9 for par in seg for p in par)

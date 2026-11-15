@@ -23,6 +23,7 @@ from PySide6.QtGui import QColor, QPainter, QPainterPath
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
                                QVBoxLayout, QWidget)
 
+from src.features import FeatureExtractor as FE
 from src.gui import glifos, styles
 from src.gui.ObservationStrip import ObservationStrip
 from src.gui.ProbabilityPanel import ProbabilityPanel
@@ -111,6 +112,8 @@ class RecognizerView(QWidget):
 
         # ---------------- hoja izquierda ----------------
         self.observaciones = ObservationStrip()
+        self.observaciones.seleccion.connect(self._mostrar_simbolo)
+        self._segmentos: list = []
         ayuda = QLabel(self.AYUDA)
         ayuda.setObjectName("nota")
         acciones = QHBoxLayout()
@@ -199,7 +202,12 @@ class RecognizerView(QWidget):
     def crear_lienzo(self) -> QWidget:
         raise NotImplementedError
 
-    def simbolos(self) -> list[int]:
+    def simbolos_y_segmentos(self) -> tuple[list[int], list]:
+        """Símbolos O_1…O_T y, para cada uno, el tramo del lienzo que lo produjo."""
+        raise NotImplementedError
+
+    def resaltar(self, segmento, texto: str, arriba: bool) -> None:
+        """Marca en el lienzo el tramo de una flecha (o lo quita si segmento es None)."""
         raise NotImplementedError
 
     def proyectar(self, letra: str | None) -> None:
@@ -215,6 +223,15 @@ class RecognizerView(QWidget):
         for b in self.findChildren(QPushButton, "segmento"):
             b.setChecked(b.text() == ("Plano" if self.MODO == "2d" else "Esfera"))
 
+    def _mostrar_simbolo(self, t) -> None:
+        """Clic en una flecha de la tira: se resalta su tramo en el plano o en la esfera."""
+        if t is None or t >= len(self._segmentos):
+            self.resaltar(None, "", False)
+            return
+        s = self.observaciones.simbolos[t]
+        texto = f"O{''.join('₀₁₂₃₄₅₆₇₈₉'[int(d)] for d in str(t + 1))} {FE.FLECHAS[s % FE.K]}"
+        self.resaltar(self._segmentos[t], texto, s >= FE.PEN_UP)
+
     def reiniciar(self) -> None:
         self.rec.reset()
         self.letra_proyectada = None
@@ -222,7 +239,7 @@ class RecognizerView(QWidget):
 
     def _actualizar(self) -> None:
         """Se llama cada vez que cambia el dibujo (cada movimiento del mouse)."""
-        simbolos = self.simbolos()
+        simbolos, self._segmentos = self.simbolos_y_segmentos()
         self.rec.update(simbolos)
         completo = not self.lienzo.dibujando
         # Lápiz abajo: "¿es el comienzo de la letra?"  ·  Lápiz arriba: "¿es la letra completa?"
@@ -255,7 +272,7 @@ class RecognizerView(QWidget):
             self.explicacion.setText(f"Mientras escribes parece el comienzo de una «{letra}». "
                                      "La línea roja muestra cómo seguiría.")
 
-        estado = self.rec.estado_actual(letra)
+        estado = self.rec.estado_actual(letra, completo)
         self.cadena.set_estado(estado)
         if estado:
             variante = (f", forma {estado['variante']} de {estado['variantes']}"

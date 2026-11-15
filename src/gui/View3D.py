@@ -19,7 +19,8 @@ from src.gui.Sphere3D import Sphere3D
 class View3D(RecognizerView):
     MODO = "3d"
     TITULO = "Esfera"
-    AYUDA = "Clic izquierdo: escribir. Clic derecho o Shift + clic: girar 360°. Rueda: zoom. Flechas: girar."
+    AYUDA = ("Clic izquierdo: escribir. Clic derecho o Shift + clic: girar 360°. Rueda: zoom. "
+             "Clic en una flecha de la tira: ver dónde está en la esfera.")
 
     def crear_lienzo(self) -> Sphere3D:
         return Sphere3D()
@@ -36,8 +37,11 @@ class View3D(RecognizerView):
         self.b_auto.toggled.connect(lambda on: self.lienzo.auto.start(30) if on else self.lienzo.auto.stop())
         return [b_orientar, self.b_auto]
 
-    def simbolos(self) -> list[int]:
-        return F3.strokes_to_symbols(self.lienzo.trazos_escritura())
+    def simbolos_y_segmentos(self):
+        return F3.simbolos_y_segmentos(self.lienzo.trazos_escritura())
+
+    def resaltar(self, segmento, texto: str, arriba: bool) -> None:
+        self.lienzo.set_resaltado_escritura(segmento, texto, arriba)
 
     def proyectar(self, letra: str | None) -> None:
         if letra is None:
@@ -46,7 +50,7 @@ class View3D(RecognizerView):
         trazos = self.lienzo.trazos_escritura()
         paso = F3.STEP / F3.escala(trazos)
         segmentos, p = [], self.lienzo.ultimo_punto_escritura()
-        for vec, abajo in self.rec.project_steps(letra):
+        for vec, abajo in self.rec.project_steps(letra, completo=not self.lienzo.dibujando):
             q = F3.mover(p, vec[0] * paso, vec[1] * paso)       # vec = (este, sur) en "pasos"
             segmentos.append((p, q, abajo))
             p = q

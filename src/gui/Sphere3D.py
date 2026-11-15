@@ -66,6 +66,7 @@ class Sphere3D(QWidget):
         self.trazos: list[list[np.ndarray]] = []   # en el marco de la ESFERA
         self.marco: np.ndarray | None = None       # R en el momento de empezar la letra
         self.proyeccion: list = []                 # (p0, p1, abajo) en el marco de la esfera
+        self.resaltado = None                      # (p0, p1, texto, arriba) en el marco de la esfera
         self.cursor_angulos: tuple[float, float] | None = None
         self._dibujando = False
         self._girando = False
@@ -125,6 +126,7 @@ class Sphere3D(QWidget):
         self.trazos.clear()
         self.marco = None
         self.proyeccion = []
+        self.resaltado = None
         self.update()
         self.trazos_cambiaron.emit()
 
@@ -158,6 +160,29 @@ class Sphere3D(QWidget):
         else:
             Mt = self.marco.T
             self.proyeccion = [(Mt @ p, Mt @ q, abajo) for p, q, abajo in segmentos]
+        self.update()
+
+    def set_resaltado_escritura(self, segmento, texto: str = "", arriba: bool = False) -> None:
+        """
+        Marca sobre la esfera el tramo que produjo la flecha seleccionada en la tira O₁…O_T.
+        Si el tramo quedó del lado de atrás, gira la esfera lo mínimo para traerlo al frente:
+        eje = c × ẑ,  ángulo = arccos(c · ẑ), con c el punto medio en el marco de la cámara.
+        """
+        if segmento is None or self.marco is None:
+            self.resaltado = None
+            self.update()
+            return
+        Mt = self.marco.T
+        p0, p1 = Mt @ np.asarray(segmento[0]), Mt @ np.asarray(segmento[1])
+        self.resaltado = (p0, p1, texto, arriba)
+        medio = p0 + p1
+        c = self.R @ (medio / max(np.linalg.norm(medio), 1e-12))
+        if c[2] < 0.55:                                   # poco visible: traerlo al frente
+            eje = np.cross(c, np.array([0.0, 0.0, 1.0]))
+            if np.linalg.norm(eje) < 1e-9:
+                eje = np.array([0.0, 1.0, 0.0])
+            angulo = float(np.arccos(np.clip(c[2], -1.0, 1.0))) - np.radians(15)
+            self.girar(eje, max(angulo, 0.0))
         self.update()
 
     # ---------------- eventos ----------------
@@ -289,6 +314,9 @@ class Sphere3D(QWidget):
             if abajo:
                 self._polilinea(g, np.array([p0, p1]), pen_proy, None)
 
+        if self.resaltado is not None:
+            self._dibujar_resaltado(g, grosor)
+
         # inicio de cada trazo con su número (si se ve)
         f = g.font()
         f.setPixelSize(int(grosor * 2.2))
@@ -315,3 +343,38 @@ class Sphere3D(QWidget):
             g.drawText(QRectF(0, self.height() - 24, self.width() - 8, 20), Qt.AlignRight | Qt.AlignVCenter,
                        f"θ {th:5.1f}°   φ {ph:6.1f}°")
         g.end()
+
+    def _dibujar_resaltado(self, g: QPainter, grosor: float) -> None:
+        """Resaltador amarillo y flecha roja sobre el tramo elegido, con su etiqueta O_t."""
+        p0, p1, texto, arriba = self.resaltado
+        tramo = np.array([F3.slerp(p0, p1, u) for u in np.linspace(0, 1, 6)])
+        amarillo = QColor(styles.RESALTADOR)
+        amarillo.setAlpha(220)
+        self._polilinea(g, tramo, QPen(amarillo, grosor * 4.2, Qt.SolidLine, Qt.RoundCap), None)
+        self._polilinea(g, tramo, QPen(QColor(styles.LAPIZ_ROJO), grosor * 0.9,
+                                       Qt.DashLine if arriba else Qt.SolidLine, Qt.RoundCap), None)
+        cam = np.array([self.R @ p0, self.R @ p1])
+        if cam[1][2] <= 1.0 / D:
+            return
+        a, b = (QPointF(*q) for q in self._a_pantalla(cam))
+        d = b - a
+        largo = max((d.x() ** 2 + d.y() ** 2) ** 0.5, 1e-6)
+        ux, uy = d.x() / largo, d.y() / largo
+        tam = grosor * 2.6
+        g.setPen(QPen(QColor(styles.LAPIZ_ROJO), grosor * 0.9, Qt.SolidLine, Qt.RoundCap))
+        for sx in (1, -1):
+            g.drawLine(b, QPointF(b.x() - tam * (ux * 0.87 - sx * uy * 0.5), b.y() - tam * (uy * 0.87 + sx * ux * 0.5)))
+        if texto:
+            f = g.font()
+            f.setPixelSize(12)
+            f.setBold(True)
+            g.setFont(f)
+            ancho = g.fontMetrics().horizontalAdvance(texto) + 14
+            caja = QRectF(b.x() + 10, b.y() - 30, ancho, 22)
+            if caja.right() > self.width() - 4:
+                caja.moveRight(a.x() - 10)
+            g.setPen(Qt.NoPen)
+            g.setBrush(QColor(styles.TINTA))
+            g.drawRoundedRect(caja, 6, 6)
+            g.setPen(QColor(styles.HOJA))
+            g.drawText(caja, Qt.AlignCenter, texto)

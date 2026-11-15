@@ -127,9 +127,51 @@ class TarjetaModo(QPushButton):
         g.drawLine(punta, punta + QPointF(-3, -8))
 
 
+class TarjetaGuia(QPushButton):
+    """Tarjeta ancha: Estandarización del alfabeto (cómo se escribe cada letra)."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setMinimumHeight(118)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setStyleSheet("QPushButton { background: transparent; border: none; padding: 0; }")
+
+    def paintEvent(self, _) -> None:
+        g = QPainter(self)
+        g.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        encima = self.underMouse() or self.hasFocus()
+        g.setPen(QPen(QColor(styles.TINTA if encima else styles.RENGLON), 1.6 if encima else 1))
+        g.setBrush(QColor(styles.HOJA))
+        g.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), 18, 18)
+        ilus = QRectF(14, 12, 230, h - 24)
+        g.setPen(Qt.NoPen)
+        g.setBrush(QColor(styles.PAPEL))
+        g.drawRoundedRect(ilus, 12, 12)
+        for i, letra in enumerate("akt"):
+            caja = QRectF(ilus.left() + 14 + i * 70, ilus.top() + 4, 62, ilus.height() - 8)
+            glifos.dibujar_letra(g, letra, caja, styles.TINTA, grosor=3.2, numeros=True, linea_base=True)
+        f = QFont(self.font())
+        f.setPixelSize(20)
+        f.setWeight(QFont.DemiBold)
+        g.setFont(f)
+        g.setPen(QColor(styles.TINTA))
+        x = ilus.right() + 22
+        g.drawText(QRectF(x, 18, w - x - 20, 30), Qt.AlignLeft | Qt.AlignVCenter, "Estandarización del alfabeto")
+        f.setPixelSize(14)
+        f.setWeight(QFont.Normal)
+        g.setFont(f)
+        g.setPen(QColor(styles.GRAFITO))
+        g.drawText(QRectF(x, 50, w - x - 20, h - 58), Qt.AlignLeft | Qt.AlignTop | Qt.TextWordWrap,
+                   "Mira cómo se traza cada letra, en orden y con sus números, y practica encima del calco.")
+        g.end()
+
+
 class MenuView(QWidget):
     abrir_2d = Signal()
     abrir_3d = Signal()
+    abrir_guia = Signal()
 
     def __init__(self, hay_3d: bool = False, parent=None) -> None:
         super().__init__(parent)
@@ -167,8 +209,12 @@ class MenuView(QWidget):
         raiz.setContentsMargins(56, 44, 56, 44)
         raiz.setSpacing(56)
         raiz.addLayout(izq, 4)
+        guia = TarjetaGuia()
+        guia.clicked.connect(self.abrir_guia.emit)
         der = QVBoxLayout()
+        der.setSpacing(18)
         der.addStretch(1)
         der.addLayout(tarjetas, 6)
+        der.addWidget(guia)
         der.addStretch(1)
         raiz.addLayout(der, 7)

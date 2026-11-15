@@ -26,6 +26,8 @@ class Canvas2D(QWidget):
         super().__init__(parent)
         self.trazos: list[list[tuple[float, float]]] = []
         self.proyeccion: list = []                 # segmentos (p0, p1, lapiz_abajo)
+        self.resaltado = None                      # (p0, p1, texto, lapiz_arriba) de la flecha elegida
+        self.plantilla: list | None = None         # trazos de una letra modelo para calcar (modo práctica)
         self._dibujando = False
         self.setMinimumSize(360, 360)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -62,6 +64,11 @@ class Canvas2D(QWidget):
 
     def set_proyeccion(self, segmentos: list) -> None:
         self.proyeccion = segmentos
+        self.update()
+
+    def set_resaltado(self, segmento, texto: str = "", arriba: bool = False) -> None:
+        """Marca en la hoja el tramo que produjo la flecha seleccionada en la tira O₁…O_T."""
+        self.resaltado = None if segmento is None else (segmento[0], segmento[1], texto, arriba)
         self.update()
 
     def ultimo_punto(self):
@@ -138,6 +145,20 @@ class Canvas2D(QWidget):
 
         grosor = max(3.0, a.width() / 130)
 
+        # letra modelo "en calco" (sección Estandarización del alfabeto)
+        if self.plantilla:
+            calco = QColor(styles.RENGLON_FUERTE)
+            calco.setAlpha(150)
+            g.setPen(QPen(calco, grosor * 3.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            g.setBrush(Qt.NoBrush)
+            for t in self.plantilla:
+                camino = QPainterPath(self._a_pantalla(*t[0]))
+                for x, y in t[1:]:
+                    camino.lineTo(self._a_pantalla(x, y))
+                if len(t) == 1:
+                    camino.lineTo(self._a_pantalla(t[0][0] + 0.5, t[0][1]))
+                g.drawPath(camino)
+
         # proyección: lápiz rojo punteado
         rojo = QColor(styles.LAPIZ_ROJO)
         pen = QPen(rojo, grosor * 0.75, Qt.CustomDashLine, Qt.RoundCap)
@@ -163,6 +184,9 @@ class Canvas2D(QWidget):
                 camino.lineTo(self._a_pantalla(trazo[0][0] + 0.5, trazo[0][1]))
             g.drawPath(camino)
 
+        if self.resaltado is not None:
+            self._dibujar_resaltado(g, grosor)
+
         # inicio de cada trazo con su número de orden
         f = g.font()
         f.setPixelSize(int(grosor * 2.2))
@@ -178,6 +202,7 @@ class Canvas2D(QWidget):
             g.drawText(QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r), Qt.AlignCenter, str(i))
 
         if not self.trazos:
+            self.resaltado = None
             g.setPen(QColor(styles.GRAFITO))
             f.setPixelSize(15)
             f.setBold(False)
@@ -185,3 +210,37 @@ class Canvas2D(QWidget):
             g.drawText(QRectF(self._a_pantalla(90, 720), self._a_pantalla(990, 880)), Qt.AlignCenter,
                        "Escribe una letra minúscula sobre los renglones")
         g.end()
+
+    def _dibujar_resaltado(self, g: QPainter, grosor: float) -> None:
+        """Resaltador amarillo sobre el tramo, flecha roja encima y una etiqueta con O_t."""
+        p0, p1, texto, arriba = self.resaltado
+        a, b = self._a_pantalla(*p0), self._a_pantalla(*p1)
+        amarillo = QColor(styles.RESALTADOR)
+        amarillo.setAlpha(210)
+        g.setPen(QPen(amarillo, grosor * 4.2, Qt.SolidLine, Qt.RoundCap))
+        g.drawLine(a, b)
+        rojo = QColor(styles.LAPIZ_ROJO)
+        g.setPen(QPen(rojo, grosor * 0.9, Qt.DashLine if arriba else Qt.SolidLine, Qt.RoundCap))
+        g.drawLine(a, b)
+        # punta de flecha en p1
+        d = b - a
+        largo = max((d.x() ** 2 + d.y() ** 2) ** 0.5, 1e-6)
+        ux, uy = d.x() / largo, d.y() / largo
+        tam = grosor * 2.6
+        for sx in (1, -1):
+            g.drawLine(b, QPointF(b.x() - tam * (ux * 0.87 - sx * uy * 0.5), b.y() - tam * (uy * 0.87 + sx * ux * 0.5)))
+        # etiqueta
+        if texto:
+            f = g.font()
+            f.setPixelSize(12)
+            f.setBold(True)
+            g.setFont(f)
+            ancho = g.fontMetrics().horizontalAdvance(texto) + 14
+            caja = QRectF(b.x() + 10, b.y() - 30, ancho, 22)
+            if caja.right() > self.width() - 4:
+                caja.moveRight(a.x() - 10)
+            g.setPen(Qt.NoPen)
+            g.setBrush(QColor(styles.TINTA))
+            g.drawRoundedRect(caja, 6, 6)
+            g.setPen(QColor(styles.HOJA))
+            g.drawText(caja, Qt.AlignCenter, texto)

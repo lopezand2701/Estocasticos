@@ -94,26 +94,40 @@ def escala(strokes) -> float:
     return float(np.clip(lado, lo, hi)) / max(lado, TAM_MIN)
 
 
-def strokes_to_symbols(strokes, step: float = STEP, normalizar: bool = True) -> list[int]:
+def simbolos_y_segmentos(strokes, step: float = STEP, normalizar: bool = True):
     """
-    strokes: lista de trazos; cada trazo es una lista de puntos [x, y] o [x, y, t].
-    Devuelve la secuencia de símbolos (enteros 0..M-1).
-    normalizar=True escala el dibujo a TAM_REF antes de remuestrear.
+    Igual que strokes_to_symbols, pero además devuelve, para cada símbolo O_t,
+    el tramo del lienzo que lo produjo: (p0, p1) en coordenadas 0..1000.
+    Sirve para mostrar en el dibujo dónde está cada flecha de la tira O_1…O_T.
     """
     s = escala(strokes) if normalizar else 1.0
     simbolos: list[int] = []
+    segmentos: list[tuple[np.ndarray, np.ndarray]] = []
     ultimo = None                                # último punto remuestreado del trazo anterior
+
+    def agregar(pts: np.ndarray, desplazar: int = 0) -> None:
+        simbolos.extend(_direcciones(pts, desplazar))
+        segmentos.extend((pts[i] / s, pts[i + 1] / s) for i in range(len(pts) - 1))
+
     for trazo in strokes:
         if len(trazo) == 0:
             continue
         pts = np.asarray(trazo, dtype=float)[:, :2] * s
         if ultimo is not None:                   # salto con el lápiz arriba
-            salto = resample(np.array([ultimo, pts[0]]), step)
-            simbolos += _direcciones(salto, desplazar=PEN_UP)
+            agregar(resample(np.array([ultimo, pts[0]]), step), desplazar=PEN_UP)
         rs = resample(pts, step)
-        simbolos += _direcciones(rs)
+        agregar(rs)
         ultimo = rs[-1]
-    return simbolos
+    return simbolos, segmentos
+
+
+def strokes_to_symbols(strokes, step: float = STEP, normalizar: bool = True) -> list[int]:
+    """
+    strokes: lista de trazos; cada trazo es una lista de puntos [x, y] o [x, y, t].
+    Devuelve la secuencia de símbolos (enteros 0..M-1).
+    normalizar=True ajusta el tamaño (ver escala) antes de remuestrear.
+    """
+    return simbolos_y_segmentos(strokes, step, normalizar)[0]
 
 
 def symbol_vector(k: int, step: float = STEP) -> np.ndarray:

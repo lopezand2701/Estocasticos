@@ -17,7 +17,8 @@ from src.gui.RecognizerView import RecognizerView
 class View2D(RecognizerView):
     MODO = "2d"
     TITULO = "Plano"
-    AYUDA = "Escribe con el clic izquierdo. Al soltar, la letra se evalúa completa."
+    AYUDA = ("Escribe con el clic izquierdo. Al soltar, la letra se evalúa completa. "
+             "Haz clic en una flecha de la tira para ver de qué parte del trazo salió.")
 
     def crear_lienzo(self) -> Canvas2D:
         return Canvas2D()
@@ -26,12 +27,16 @@ class View2D(RecognizerView):
     def canvas(self) -> Canvas2D:            # nombre usado en versiones anteriores
         return self.lienzo
 
-    def simbolos(self) -> list[int]:
-        return FE.strokes_to_symbols(self.lienzo.trazos, step=self.rec.step)
+    def simbolos_y_segmentos(self):
+        return FE.simbolos_y_segmentos(self.lienzo.trazos, step=self.rec.step)
+
+    def resaltar(self, segmento, texto: str, arriba: bool) -> None:
+        self.lienzo.set_resaltado(segmento, texto, arriba)
 
     def proyectar(self, letra: str | None) -> None:
         if letra is None:
             self.lienzo.set_proyeccion([])
             return
         escala = FE.escala(self.lienzo.trazos)          # la proyección usa el mismo tamaño normalizado
-        self.lienzo.set_proyeccion(self.rec.project(letra, self.lienzo.ultimo_punto(), escala))
+        completo = not self.lienzo.dibujando
+        self.lienzo.set_proyeccion(self.rec.project(letra, self.lienzo.ultimo_punto(), escala, completo))

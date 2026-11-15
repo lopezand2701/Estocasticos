@@ -90,3 +90,15 @@ def test_baum_welch_nunca_baja():
     assert all(b >= a - 1e-6 for a, b in zip(historial, historial[1:]))
     assert hmm.A[1, 0] == 0.0                        # izquierda-derecha se conserva
     assert hmm.B[0, 0] > 0.9 and hmm.B[1, 1] > 0.9   # aprendió "bajar" y luego "derecha"
+
+
+def test_ninguna_letra_llega_al_100():
+    """Con la calibración las probabilidades suman 1, ninguna es 0 y ninguna llega a 100 %."""
+    from src.hmm.Recognizer import Recognizer
+    rec = Recognizer({"L": [(1.0, modelo_L())], "R": [(1.0, HMM(2, 3, A=[[0.7, 0.3], [0, 1]],
+                      B=[[0.2, 0.7, 0.1], [0.6, 0.3, 0.1]], pi=[1, 0]))]})
+    rec.update([ABAJO] * 40 + [DERECHA] * 40)            # una "L" larguísima: evidencia enorme
+    p = dict(rec.posteriors())
+    assert sum(p.values()) == pytest.approx(1.0)
+    assert 0.0 < min(p.values()) and max(p.values()) < 1.0
+    assert max(p.values()) < 1 - rec.mezcla / 2 + 1e-9     # la versión suave conserva parte para la otra letra

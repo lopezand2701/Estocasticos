@@ -47,3 +47,13 @@ def test_tamano_y_posicion_no_importan():
     chica = [[[900, 900], [900, 940], [920, 940]]]             # la misma "L" 5 veces más pequeña, en una esquina
     assert FE.escala(normal) == 1.0
     assert FE.strokes_to_symbols(chica) == FE.strokes_to_symbols(normal)
+
+
+def test_cada_simbolo_tiene_su_tramo():
+    """Para la tira de flechas: cada símbolo O_t sabe de qué tramo del dibujo salió."""
+    i_palito = [[500, 400], [500, 700]]
+    i_punto = [[500, 250], [501, 251]]
+    s, seg = FE.simbolos_y_segmentos([i_palito, i_punto])
+    assert len(s) == len(seg) and s == FE.strokes_to_symbols([i_palito, i_punto])
+    for k, (p0, p1) in zip(s, seg):                  # el tramo apunta en la dirección de su símbolo
+        assert FE.quantize(*(np.asarray(p1) - np.asarray(p0))) == k % FE.K

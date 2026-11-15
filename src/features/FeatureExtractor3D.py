@@ -132,25 +132,38 @@ def _direcciones(pts: np.ndarray, desplazar: int = 0) -> list[int]:
     return [FE.quantize(dp * s, dt) + desplazar for dp, dt, s in zip(d_phi, d_theta, sen)]
 
 
-def strokes_to_symbols(strokes, normalizar: bool = True) -> list[int]:
+def simbolos_y_segmentos(strokes, normalizar: bool = True):
     """
-    strokes: lista de trazos; cada trazo es una lista de puntos unitarios (x, y, z)
-    en el marco de escritura. Devuelve la secuencia de símbolos (0..31).
+    Igual que strokes_to_symbols, pero además devuelve, para cada símbolo O_t,
+    el tramo de la superficie que lo produjo: (p0, p1) unitarios, en el marco de escritura.
     """
     paso = STEP / (escala(strokes) if normalizar else 1.0)
     simbolos: list[int] = []
+    segmentos: list[tuple[np.ndarray, np.ndarray]] = []
     ultimo = None
+
+    def agregar(pts: np.ndarray, desplazar: int = 0) -> None:
+        simbolos.extend(_direcciones(pts, desplazar))
+        segmentos.extend((pts[i], pts[i + 1]) for i in range(len(pts) - 1))
+
     for trazo in strokes:
         if len(trazo) == 0:
             continue
         pts = np.asarray(trazo, dtype=float)
         if ultimo is not None:                                  # salto con el lápiz arriba
-            salto = remuestrear(np.array([ultimo, pts[0]]), paso)
-            simbolos += _direcciones(salto, desplazar=FE.PEN_UP)
+            agregar(remuestrear(np.array([ultimo, pts[0]]), paso), desplazar=FE.PEN_UP)
         rs = remuestrear(pts, paso)
-        simbolos += _direcciones(rs)
+        agregar(rs)
         ultimo = rs[-1]
-    return simbolos
+    return simbolos, segmentos
+
+
+def strokes_to_symbols(strokes, normalizar: bool = True) -> list[int]:
+    """
+    strokes: lista de trazos; cada trazo es una lista de puntos unitarios (x, y, z)
+    en el marco de escritura. Devuelve la secuencia de símbolos (0..31).
+    """
+    return simbolos_y_segmentos(strokes, normalizar)[0]
 
 
 # ---------------------------------------------------------------------- #
