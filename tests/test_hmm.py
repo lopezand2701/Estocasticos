@@ -102,3 +102,32 @@ def test_ninguna_letra_llega_al_100():
     assert sum(p.values()) == pytest.approx(1.0)
     assert 0.0 < min(p.values()) and max(p.values()) < 1.0
     assert max(p.values()) < 1 - rec.mezcla / 2 + 1e-9     # la versión suave conserva parte para la otra letra
+
+
+def test_rechaza_garabatos():
+    """Un trazo mucho más largo que la letra, o que se le parece poco, se marca como 'no es una letra'."""
+    from src.hmm.Recognizer import Recognizer
+    # una L normal da ℓ/T ≈ −0.66; diez flechas hacia arriba dan ≈ −1.41
+    rec = Recognizer({"L": [(1.0, modelo_L())]}, rechazo={"L": {"ll_min": -1.0, "T_max": 20}})
+    rec.update([ABAJO] * 4 + [DERECHA] * 4)
+    assert rec.rechazo("L", completo=True) is None               # una L normal
+    rec.reset(); rec.update([ABAJO, DERECHA] * 15)
+    assert "largo" in rec.rechazo("L", completo=True)             # 30 símbolos > 20
+    rec.reset(); rec.update([ARRIBA] * 10)
+    assert rec.rechazo("L", completo=True) is not None             # puras flechas hacia arriba: no es una L
+
+
+def test_giro_total_y_tachones():
+    """Un tachón de ida y vuelta gira 180° en cada vuelta; una línea recta no gira."""
+    from src.features import FeatureExtractor as FE
+    from src.hmm.Recognizer import Recognizer
+    der, izq, abajo = 0, 8, 4                                      # → ← ↓ en las 16 direcciones
+    assert FE.giro_total([der] * 5) == 0
+    assert FE.giro_total([abajo] * 3 + [der] * 3) == 90              # una "L": un solo giro de 90°
+    tachon = ([der] * 3 + [izq] * 3) * 4                             # 7 vueltas de 180°
+    assert FE.giro_total(tachon) == 7 * 180
+    assert FE.giro_total([der, der + FE.PEN_UP, izq]) == 0           # con el lápiz arriba no se cuenta
+    rec = Recognizer({"L": [(1.0, modelo_L())]},
+                     rechazo={"L": {"ll_min": -99, "T_max": 99, "giro_max": 200}})
+    rec.update([0, 0, 1, 1]); assert rec.rechazo("L") is None
+    rec.reset(); rec.update([1, 0] * 6); assert "dirección" in rec.rechazo("L")

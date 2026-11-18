@@ -37,7 +37,8 @@ class MainWindow(QMainWindow):
             self.vista_3d.volver.connect(self._ir_al_menu)
             self.vista_3d.cambiar_modo.connect(self._ir_a)
         # la guía usa su propio reconocedor (mismos modelos 2D, estado independiente)
-        self.guia = GuideView(Recognizer(rec_2d.models, rec_2d.step, rec_2d.kappa, rec_2d.kappa_suave, rec_2d.mezcla))
+        self.guia = GuideView(Recognizer(rec_2d.models, rec_2d.step, rec_2d.kappa, rec_2d.kappa_suave, rec_2d.mezcla,
+                                         rec_2d.umbrales))
         self.pilas.addWidget(self.guia)
         self.guia.volver.connect(self._ir_al_menu)
         self.menu.abrir_guia.connect(self._ir_a_guia)

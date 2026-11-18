@@ -48,9 +48,11 @@ def _logsumexp(x: np.ndarray) -> float:
 
 class Recognizer:
     def __init__(self, models: dict[str, list[tuple[float, HMM]]], step: float = FE.STEP,
-                 kappa: float = KAPPA, kappa_suave: float = KAPPA_SUAVE, mezcla: float = MEZCLA) -> None:
+                 kappa: float = KAPPA, kappa_suave: float = KAPPA_SUAVE, mezcla: float = MEZCLA,
+                 rechazo: dict | None = None) -> None:
         # models[letra] = [(peso, hmm), (peso, hmm), ...]
         self.models = models
+        self.umbrales = rechazo or {}          # {letra: {"ll_min": .., "T_max": ..}} (ver train.py)
         self.kappa = kappa
         self.kappa_suave = kappa_suave
         self.mezcla = mezcla
@@ -69,7 +71,7 @@ class Recognizer:
                 models[letra] = [(1.0, HMM.from_dict(d))]
             else:                                            # formato nuevo: lista de variantes
                 models[letra] = [(v["peso"], HMM.from_dict(v["hmm"])) for v in d]
-        return cls(models, step=data.get("step", FE.STEP))
+        return cls(models, step=data.get("step", FE.STEP), rechazo=data.get("rechazo"))
 
     def reset(self) -> None:
         """Olvida el trazo actual (botón Reiniciar captura)."""
@@ -130,6 +132,31 @@ class Recognizer:
         p = (1.0 - self.mezcla) * softmax(self.kappa * ll) + self.mezcla * softmax(self.kappa_suave * ll)
         orden = np.argsort(-p)
         return [(self.letters[i], float(p[i])) for i in orden]
+
+    def rechazo(self, letra: str, completo: bool = False) -> str | None:
+        """
+        Prueba de "¿esto es una letra?" (Bayes siempre elige alguna, aunque sea un garabato).
+        Se rechaza si la letra ganadora explica el trazo peor que sus propios ejemplos:
+            T > T_max            → demasiado largo para esa letra
+            giro > giro_max      → cambia de dirección muchas más veces que esa letra (tachón)
+            ℓ / T < ll_min       → no se parece lo suficiente  (solo con el trazo completo)
+        Devuelve el motivo, o None si el trazo sí parece una letra.
+        """
+        u = self.umbrales.get(letra)
+        if u is None or not self.symbols:
+            return None
+        T = len(self.symbols)
+        if T > u["T_max"]:
+            return f"es mucho más largo que cualquier «{letra}» ({T} símbolos; una «{letra}» tiene hasta {int(u['T_max'])})"
+        giro = FE.giro_total(self.symbols)
+        if "giro_max" in u and giro > u["giro_max"]:
+            return (f"cambia de dirección demasiadas veces (gira {giro:.0f}°; "
+                    f"una «{letra}» gira como mucho {u['giro_max']:.0f}°)")
+        if completo:
+            ll, _ = self._log_letra(letra, True)
+            if ll / T < u["ll_min"]:
+                return f"no se parece lo suficiente a ninguna letra (ni siquiera a la «{letra}», la más cercana)"
+        return None
 
     # ------------------------------------------------------------------ #
     # 2. Proyección de la trayectoria futura

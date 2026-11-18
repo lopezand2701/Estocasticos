@@ -124,6 +124,41 @@ def entrenar(grupos, max_por_variante: int = 150, n_iter: int = 30, semilla: int
     return modelos
 
 
+MARGEN_LL = 1.1       # margen de seguridad sobre el percentil 1 de la verosimilitud por símbolo
+MARGEN_T = 1.3        # margen sobre el percentil 99 de la longitud
+MARGEN_GIRO = 1.3     # margen sobre el percentil 99 del giro total
+# Con estos márgenes (medido con las muestras de prueba): ~1 % de letras reales rechazadas,
+# ~88 % de tachones de ida y vuelta y ~86 % de garabatos al azar rechazados.
+
+
+def umbrales_rechazo(modelos, grupos, max_muestras: int = 200, semilla: int = 0) -> dict:
+    """
+    Para cada letra, con SUS ejemplos de entrenamiento:
+        ll_min   = MARGEN_LL   · percentil 1 de  ℓ/T   (ℓ = log P(O | letra completa), T = nº de símbolos)
+        T_max    = MARGEN_T    · percentil 99 de T
+        giro_max = MARGEN_GIRO · percentil 99 del giro total (FE.giro_total)
+    Un trazo cuya letra ganadora quede por debajo de ll_min o por encima de T_max o giro_max
+    se rechaza: no se parece lo suficiente a ninguna letra (por ejemplo, un garabato).
+    """
+    rnd = random.Random(semilla)
+    umbrales = {}
+    for c, lista in modelos.items():
+        secs = [s for k in grupos[c] for s in grupos[c][k]]
+        if len(secs) > max_muestras:
+            secs = rnd.sample(secs, max_muestras)
+        llT, Ts, giros = [], [], []
+        for O in secs:
+            ll = [np.log(w) + h.log_likelihood(O, completo=True) for w, h in lista]
+            m = max(ll)
+            llT.append((m + np.log(np.sum(np.exp(np.array(ll) - m)))) / len(O))
+            Ts.append(len(O))
+            giros.append(FE.giro_total(O))
+        umbrales[c] = {"ll_min": round(float(np.percentile(llT, 1)) * MARGEN_LL, 4),
+                       "T_max": round(float(np.percentile(Ts, 99)) * MARGEN_T, 1),
+                       "giro_max": round(float(np.percentile(giros, 99)) * MARGEN_GIRO, 1)}
+    return umbrales
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Entrena los HMM de las 27 letras (2D).")
     ap.add_argument("--datos", nargs="*", help="JSON de Glifo (por defecto: todos los de data/raw)")
@@ -147,7 +182,10 @@ def main() -> None:
     print(f"Entrenamiento: {len(entrenamiento)} muestras | Prueba: {len(prueba)} muestras")
 
     print(f"Modo: {args.modo.upper()}")
-    modelos = entrenar(preparar(entrenamiento, args.modo), args.max_por_variante, args.iter)
+    grupos = preparar(entrenamiento, args.modo)
+    modelos = entrenar(grupos, args.max_por_variante, args.iter)
+    rechazo = umbrales_rechazo(modelos, grupos)
+    print("Umbrales de rechazo calculados (para reconocer garabatos que no son letras).")
 
     salida = Path(args.salida or f"models/{args.modo}/hmm_{args.modo}.json")
     salida.parent.mkdir(parents=True, exist_ok=True)
@@ -157,6 +195,7 @@ def main() -> None:
         "datos": [r.name for r in rutas],
         "step": FE.STEP, "K": FE.K, "M": FE.M, "tam_normal": list(FE.TAM_NORMAL),
         "autores_prueba": autores_prueba,
+        "rechazo": rechazo,
         "modelos": {c: [{"peso": round(p, 6), "hmm": m.to_dict()} for p, m in lista]
                     for c, lista in modelos.items()},
     }, ensure_ascii=False), encoding="utf-8")

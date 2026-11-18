@@ -89,6 +89,13 @@ def main() -> None:
     top1 = sum(ranking(rec, transformar(t, rnd))[0] == c for c, t in prueba)
     print(f"\nRobustez (tamaño ×0.2–×1.6 y posición al azar{' sobre la esfera' if MODO == '3d' else ''}):  top-1 = {top1 / len(prueba):6.1%}")
 
+    if rec.umbrales:
+        rechazadas = 0
+        for c, t in prueba:
+            ranking(rec, t)
+            rechazadas += rec.rechazo(rec.posteriors(True)[0][0], completo=True) is not None
+        print(f"Letras reales rechazadas por error como 'no es una letra': {rechazadas / len(prueba):6.1%}")
+
     errores, por_letra, aciertos = Counter(), Counter(), Counter()
     for c, t in prueba:
         pred = ranking(rec, t)[0]

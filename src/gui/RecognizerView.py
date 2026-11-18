@@ -257,6 +257,18 @@ class RecognizerView(QWidget):
             self.proyectar(None)
             return
 
+        motivo = self.rec.rechazo(ranking[0][0], completo)
+        if motivo:                                   # no parece ninguna letra (por ejemplo, un garabato)
+            self.letra_proyectada = None
+            self.panel.set_datos(ranking, activo=False)
+            self.ganadora.set_letra(None)
+            self.porcentaje.setText("No es una letra")
+            self.explicacion.setText(f"El trazo {motivo}.")
+            self.cadena.set_estado(None)
+            self.nota_cadena.setText("")
+            self.proyectar(None)
+            return
+
         self.panel.set_datos(ranking)
         probs = dict(ranking)
         mejor, p_mejor = ranking[0]

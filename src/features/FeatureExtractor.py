@@ -130,6 +130,26 @@ def strokes_to_symbols(strokes, step: float = STEP, normalizar: bool = True) -> 
     return simbolos_y_segmentos(strokes, step, normalizar)[0]
 
 
+def giro_total(symbols) -> float:
+    """
+    Cuántos grados gira el lápiz en total mientras escribe (solo con el lápiz abajo).
+    Entre dos flechas seguidas se suma el ángulo más corto entre ellas: 0° si siguen
+    igual, 180° si se devuelven. Una "o" gira unos 360°; un tachón de ida y vuelta
+    gira 180° en cada vuelta, así que acumula mucho más que cualquier letra.
+    Sirve igual en 2D y en 3D (las flechas son las mismas 16 direcciones).
+    """
+    total, anterior = 0, None
+    for s in symbols:
+        if s >= PEN_UP:                 # al levantar el lápiz se empieza a contar de nuevo
+            anterior = None
+            continue
+        if anterior is not None:
+            d = abs(s - anterior) % K
+            total += min(d, K - d)
+        anterior = s
+    return total * 360.0 / K
+
+
 def symbol_vector(k: int, step: float = STEP) -> np.ndarray:
     """Desplazamiento (dx, dy) que representa un símbolo."""
     return UNIT[k % K] * step

@@ -404,7 +404,10 @@ class GuideView(QWidget):
         ranking = self.rec.posteriors(completo=True)
         mejor, p = ranking[0]
         p_letra = dict(ranking).get(self.letra, 0.0)
-        if mejor == self.letra:
+        motivo = self.rec.rechazo(mejor, completo=True)
+        if motivo:
+            lineas.append(f"{mal} El modelo no lo reconoce como una letra: {motivo}.")
+        elif mejor == self.letra:
             lineas.append(f"{bien} El modelo la reconoce como «{mejor}» ({p * 100:.0f} %).")
         else:
             lineas.append(f"{mal} El modelo la lee como «{mejor}» ({p * 100:.0f} %); "
